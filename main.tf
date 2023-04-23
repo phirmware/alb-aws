@@ -164,20 +164,33 @@ module "alb" {
 
   vpc_id = module.my_vpc.vpc_id
 
-  # select the first 2 availability zones
   subnets         = module.my_vpc.public_subnets
   security_groups = [aws_security_group.public_instance_sg.id]
+}
 
-  # access_logs = {
-  #   bucket = "my-alb-logs"
-  # }
+resource "aws_lb_listener" "my_vpc_alb_listener" {
+  load_balancer_arn = module.alb.lb_arn
+  port              = "80"
+  protocol          = "HTTP"
 
-  target_groups = [
-    {
-      name_prefix      = "pref-"
-      backend_protocol = "HTTP"
-      backend_port     = 80
-      target_type      = "instance"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.first_target_group.arn
+  }
+}
+
+resource "aws_lb_listener_rule" "second_group_listner_rule" {
+  listener_arn = aws_lb_listener.my_vpc_alb_listener.arn
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.second_target_group.arn
+  }
+
+  condition {
+    query_string {
+      key   = "region"
+      value = "another"
     }
-  ]
+  }
 }
