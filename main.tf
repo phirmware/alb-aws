@@ -13,21 +13,6 @@ provider "aws" {
   region = "us-west-2"
 }
 
-# data "aws_ami" "ubuntu" {
-#   most_recent = true
-
-#   filter {
-#     name   = "name"
-#     values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-#   }
-
-#   filter {
-#     name   = "virtualization-type"
-#     values = ["hvm"]
-#   }
-
-#   owners = ["099720109477"] # Canonical
-# }
 data "aws_ami" "amazon_linux" {
   most_recent = true
 
@@ -109,5 +94,90 @@ module "my_vpc_asg" {
 
   depends_on = [
     module.my_vpc
+  ]
+}
+
+data "aws_instances" "first_group_instances" {
+  filter {
+    name   = "availability-zone"
+    values = ["us-west-2a", "us-west-2b"]
+  }
+
+  instance_state_names = ["running"]
+  depends_on = [
+    module.my_vpc_asg
+  ]
+}
+
+data "aws_instances" "second_group_instances" {
+  filter {
+    name   = "availability-zone"
+    values = ["us-west-2c"]
+  }
+
+  instance_state_names = ["running"]
+  depends_on = [
+    module.my_vpc_asg
+  ]
+}
+
+resource "aws_lb_target_group" "first_target_group" {
+  name     = "my-vpc-first-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = module.my_vpc.vpc_id
+}
+
+resource "aws_lb_target_group" "second_target_group" {
+  name     = "my-vpc-second-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = module.my_vpc.vpc_id
+}
+
+resource "aws_lb_target_group_attachment" "first_group_attachment" {
+  count = length(data.aws_instances.first_group_instances.ids)
+
+  target_group_arn = aws_lb_target_group.first_target_group.arn
+  target_id        = data.aws_instances.first_group_instances.ids[count.index]
+  port             = 80
+}
+
+resource "aws_lb_target_group_attachment" "second_group_attachment" {
+  count = length(data.aws_instances.second_group_instances.ids)
+
+  target_group_arn = aws_lb_target_group.second_target_group.arn
+  target_id        = data.aws_instances.second_group_instances.ids[count.index]
+  port             = 80
+
+  depends_on = [
+    module.my_vpc_asg
+  ]
+}
+
+module "alb" {
+  source  = "terraform-aws-modules/alb/aws"
+  version = "~> 8.0"
+
+  name               = "my-vpc-alb"
+  load_balancer_type = "application"
+
+  vpc_id = module.my_vpc.vpc_id
+
+  # select the first 2 availability zones
+  subnets         = module.my_vpc.public_subnets
+  security_groups = [aws_security_group.public_instance_sg.id]
+
+  # access_logs = {
+  #   bucket = "my-alb-logs"
+  # }
+
+  target_groups = [
+    {
+      name_prefix      = "pref-"
+      backend_protocol = "HTTP"
+      backend_port     = 80
+      target_type      = "instance"
+    }
   ]
 }
