@@ -17,6 +17,11 @@ all times, then we are going to create the target groups for the zones
 and have the application load balancer forward traffic to the instances
 based on the rules specified.
 
+# How to test
+The instance template has user data that fetches a script from s3
+which creates a HTML file which tells the region of the instance that
+served the request. To set this up, check the readme in `./s3-setup`
+
 # How to run
 - Clone the repo and navigate inside the directory
 - ```terraform init```
