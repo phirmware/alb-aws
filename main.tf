@@ -15,26 +15,17 @@ data "aws_ami" "amazon_linux" {
 }
 
 
-module "my_vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "4.0.1"
+module "network" {
+  source = "./modules/network"
 
-  cidr                         = var.my_vpc_cidr
-  create_igw                   = true
-  create_redshift_subnet_group = false
-  create_vpc                   = true
-
-  map_public_ip_on_launch = true
-  name                    = "my_vpc"
-
-  azs                 = var.my_vpc_azs
-  public_subnets      = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+  my_vpc_cidr         = var.my_vpc_cidr
+  my_vpc_azs          = var.my_vpc_azs
   public_subnet_names = var.public_subnet_names
 }
 
 resource "aws_security_group" "public_instance_sg" {
   name   = "my_vpc_public_sg"
-  vpc_id = module.my_vpc.vpc_id
+  vpc_id = module.network.vpc_id
 
   ingress {
     cidr_blocks = ["0.0.0.0/0"]
@@ -75,10 +66,10 @@ module "my_vpc_asg" {
   create_launch_template = false
   launch_template        = aws_launch_template.my_vpc_launch_template.name
   update_default_version = true
-  vpc_zone_identifier    = module.my_vpc.public_subnets
+  vpc_zone_identifier    = module.network.public_subnets
 
   depends_on = [
-    module.my_vpc
+    module.network
   ]
 }
 
@@ -110,14 +101,14 @@ resource "aws_lb_target_group" "first_target_group" {
   name     = "my-vpc-first-tg"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = module.my_vpc.vpc_id
+  vpc_id   = module.network.vpc_id
 }
 
 resource "aws_lb_target_group" "second_target_group" {
   name     = "my-vpc-second-tg"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = module.my_vpc.vpc_id
+  vpc_id   = module.network.vpc_id
 }
 
 resource "aws_lb_target_group_attachment" "first_group_attachment" {
@@ -147,9 +138,9 @@ module "alb" {
   name               = "my-vpc-alb"
   load_balancer_type = "application"
 
-  vpc_id = module.my_vpc.vpc_id
+  vpc_id = module.network.vpc_id
 
-  subnets         = module.my_vpc.public_subnets
+  subnets         = module.network.public_subnets
   security_groups = [aws_security_group.public_instance_sg.id]
 }
 
